@@ -56,6 +56,19 @@ var tagname = 'car',
 
 
 
+var Twit = require('twit')
+
+var T = new Twit(twitter_settings);
+
+stream = T.stream('statuses/filter', { track: tagname})
+
+stream.on('tweet', function (tweet) {
+
+    if(tweet && sockets)
+    {
+        sockets.emit('new:tweets', {list: tweet});
+    }
+});
 
 
 var server = http.createServer(function (request, response) {
@@ -83,18 +96,48 @@ var server = http.createServer(function (request, response) {
 		// console.log(request)
 	    request.addListener('end', function () {
 
-	        if(request.url == '/')
+            var url_parts = url.parse(request.url, true);
+            var query = url_parts.query;
+
+            // console.log(url_parts)
+
+	        if(url_parts.pathname == '/')
 	        {
-	            file.serveFile('/index.html', 200, {}, request, response);
+                console.log('was tagname: '+tagname);
+                if(query && query.tag)
+                {
+                    tagname = query.tag;
+                };
+                console.log('now: '+tagname);
+
+                file.serveFile('/index.html', 200, {}, request, response);
+
+                if(stream)
+                {
+                    stream.stop();
+                }
+
+                stream = T.stream('statuses/filter', { track: tagname})
+
+                stream.on('tweet', function (tweet) {
+
+                    console.log('tweet '+!!tweet+' '+!!sockets);
+                    if(tweet && sockets)
+                    {
+                        console.log('emmitid');
+                        sockets.emit('new:tweets', {list: tweet});
+                    }
+                });
+                
 	        }
             //вернуть клиенту его адрес для создания им сокетного соединения
-	        else if (request.url === '/getip') { // getip - вернуть IP-адрес и порт
+	        else if (url_parts.pathname === '/getip') { // getip - вернуть IP-адрес и порт
 	      		response.writeHead(200, {'Content-Type': 'text/html'});
 	      		response.end(request.headers.host);
 	      		return;
 	    	}
             //подтверждаем подписку 
-	    	else if( url.parse(request.url).pathname === '/callback' )
+	    	else if( url_parts.pathname === '/callback' )
 	    	{
 	    		if(request.method === 'GET')
 	    		{
@@ -121,8 +164,8 @@ var server = http.createServer(function (request, response) {
 var sockets = io.listen(server);
 
 
-
 //настройка для чтения постов с инстаграмма
+/*
 Instagram = require('instagram-node-lib');
 
 Instagram.set('client_id', instagram_settings.client_id);
@@ -139,23 +182,6 @@ Instagram.subscriptions.subscribe({
   type: 'subscription',
   id: '#'
 });
-
+*/
 // Instagram.subscriptions.unsubscribe({id:'7929019'});
-console.log(Instagram.subscriptions.list());
-
-
-
-
-var Twit = require('twit')
-
-var T = new Twit(twitter_settings);
-
-var stream = T.stream('statuses/filter', { track: tagname})
-
-stream.on('tweet', function (tweet) {
-    
-    if(tweet)
-    {
-        sockets.emit('new:tweets', {list: tweet});
-    }
-});
+// console.log(Instagram.subscriptions.list());
